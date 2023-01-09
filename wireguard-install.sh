@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Secure WireGuard server installer
+# Secure WireGuard server installer for Debian, Ubuntu, CentOS, Fedora and Arch Linux
 # https://github.com/angristan/wireguard-install
 
 RED='\033[0;31m'
@@ -36,28 +36,21 @@ function checkOS() {
 		source /etc/os-release
 		OS="${ID}" # debian or ubuntu
 		if [[ ${ID} == "debian" || ${ID} == "raspbian" ]]; then
-			if [[ ${VERSION_ID} -lt 10 ]]; then
-				echo "Your version of Debian (${VERSION_ID}) is not supported. Please use Debian 10 Buster or later"
+			if [[ ${VERSION_ID} -ne 10 ]]; then
+				echo "Your version of Debian (${VERSION_ID}) is not supported. Please use Debian 10 Buster"
 				exit 1
 			fi
-			OS=debian # overwrite if raspbian
 		fi
-	elif [[ -e /etc/almalinux-release ]]; then
-		source /etc/os-release
-		OS=almalinux
 	elif [[ -e /etc/fedora-release ]]; then
 		source /etc/os-release
 		OS="${ID}"
 	elif [[ -e /etc/centos-release ]]; then
 		source /etc/os-release
 		OS=centos
-	elif [[ -e /etc/oracle-release ]]; then
-		source /etc/os-release
-		OS=oracle
 	elif [[ -e /etc/arch-release ]]; then
 		OS=arch
 	else
-		echo "Looks like you aren't running this installer on a Debian, Ubuntu, Fedora, CentOS, AlmaLinux, Oracle or Arch Linux system"
+		echo "Looks like you aren't running this installer on a Debian, Ubuntu, Fedora, CentOS or Arch Linux system"
 		exit 1
 	fi
 }
@@ -77,7 +70,7 @@ function installQuestions() {
 	echo ""
 
 	# Detect public IPv4 or IPv6 address and pre-fill for the user
-	SERVER_PUB_IP=$(ip -4 addr | sed -ne 's|^.* inet \([^/]*\)/.* scope global.*$|\1|p' | awk '{print $1}' | head -1)
+	SERVER_PUB_IP=$(ip -4 addr | sed -ne 's|^.* inet \([^/]*\)/.* scope global.*$|\1|p' | head -1)
 	if [[ -z ${SERVER_PUB_IP} ]]; then
 		# Detect public IPv6 address
 		SERVER_PUB_IP=$(ip -6 addr | sed -ne 's|^.* inet6 \([^/]*\)/.* scope global.*$|\1|p' | head -1)
@@ -130,7 +123,7 @@ function installWireGuard() {
 	installQuestions
 
 	# Install WireGuard tools and module
-	if [[ ${OS} == 'ubuntu' ]] || [[ ${OS} == 'debian' && ${VERSION_ID} -gt 10 ]]; then
+	if [[ ${OS} == 'ubuntu' ]]; then
 		apt-get update
 		apt-get install -y wireguard iptables resolvconf qrencode
 	elif [[ ${OS} == 'debian' ]]; then
@@ -148,24 +141,12 @@ function installWireGuard() {
 			dnf install -y wireguard-dkms
 		fi
 		dnf install -y wireguard-tools iptables qrencode
-	elif [[ ${OS} == 'almalinux' ]]; then
-		dnf -y install epel-release elrepo-release
-		dnf -y install wireguard-tools iptables qrencode
-		if [[ ${VERSION_ID} == 8* ]]; then
-			dnf -y install kmod-wireguard
-		fi
 	elif [[ ${OS} == 'centos' ]]; then
 		yum -y install epel-release elrepo-release
 		if [[ ${VERSION_ID} -eq 7 ]]; then
 			yum -y install yum-plugin-elrepo
 		fi
 		yum -y install kmod-wireguard wireguard-tools iptables qrencode
-	elif [[ ${OS} == 'oracle' ]]; then
-		dnf install -y oraclelinux-developer-release-el8
-		dnf config-manager --disable -y ol8_developer
-		dnf config-manager --enable -y ol8_developer_UEKR6
-		dnf config-manager --save -y --setopt=ol8_developer_UEKR6.includepkgs='wireguard-tools*'
-		dnf install -y wireguard-tools qrencode iptables
 	elif [[ ${OS} == 'arch' ]]; then
 		pacman -S --needed --noconfirm wireguard-tools qrencode
 	fi
@@ -371,8 +352,7 @@ function revokeClient() {
 
 function uninstallWg() {
 	echo ""
-	read -rp "Do you really want to remove WireGuard? [y/n]: " -e REMOVE
-	REMOVE=${REMOVE:-n}
+	read -rp "Do you really want to remove WireGuard? [y/n]: " -e -i n REMOVE
 	if [[ $REMOVE == 'y' ]]; then
 		checkOS
 
@@ -390,17 +370,8 @@ function uninstallWg() {
 				dnf copr disable -y jdoss/wireguard
 			fi
 			dnf autoremove -y
-		elif [[ ${OS} == 'almalinux' ]]; then
-			dnf -y remove wireguard-tools qrencode
-			if [[ ${VERSION_ID} == 8* ]]; then
-				dnf -y remove kmod-wireguard
-			fi
-			dnf -y autoremove
 		elif [[ ${OS} == 'centos' ]]; then
 			yum -y remove kmod-wireguard wireguard-tools qrencode
-			yum -y autoremove
-		elif [[ ${OS} == 'oracle' ]]; then
-			yum -y remove wireguard-tools qrencode
 			yum -y autoremove
 		elif [[ ${OS} == 'arch' ]]; then
 			pacman -Rs --noconfirm wireguard-tools qrencode
